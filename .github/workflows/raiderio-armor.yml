@@ -1,0 +1,74 @@
+name: Raider.IO armor comparison
+
+on:
+  workflow_dispatch:
+    inputs:
+      season:
+        description: "Raider.IO season identifier"
+        required: true
+        default: "season-mn-2"
+        type: string
+      regions:
+        description: "Server regions, cn included by default"
+        required: true
+        default: "us,eu,kr,tw,cn"
+        type: string
+      pages:
+        description: "Top run pages PER region (start with 2; later try 8 or 20)"
+        required: true
+        default: "2"
+        type: string
+      per_spec:
+        description: "Maximum characters sampled for each specialization"
+        required: true
+        default: "8"
+        type: string
+      min_samples:
+        description: "Minimum valid characters on both sides of a comparison"
+        required: true
+        default: "3"
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  compare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Test comparison logic offline
+        run: python -m unittest -v test_offline.py
+
+      - name: Download public API gear data and compare armor
+        env:
+          RIO_SEASON: ${{ inputs.season }}
+          RIO_REGIONS: ${{ inputs.regions }}
+          RIO_PAGES: ${{ inputs.pages }}
+          RIO_PER_SPEC: ${{ inputs.per_spec }}
+          RIO_MIN_SAMPLES: ${{ inputs.min_samples }}
+        run: |
+          python raiderio_armor_compare.py \
+            --season "$RIO_SEASON" \
+            --regions "$RIO_REGIONS" \
+            --pages "$RIO_PAGES" \
+            --per-spec "$RIO_PER_SPEC" \
+            --min-samples "$RIO_MIN_SAMPLES" \
+            --out results
+
+      - name: Upload output even when API requests fail
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: raiderio-armor-results
+          path: results/
+          if-no-files-found: warn
+          retention-days: 14
